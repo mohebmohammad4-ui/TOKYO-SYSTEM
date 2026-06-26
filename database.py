@@ -60,7 +60,6 @@ class Database:
         
         self.conn.commit()
     
-    # ====== دوال الإعدادات ======
     def set_setting(self, key, value):
         self.c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
         self.conn.commit()
@@ -74,7 +73,6 @@ class Database:
         self.c.execute("SELECT * FROM settings")
         return {key: value for key, value in self.c.fetchall()}
     
-    # ====== دوال الرتب التلقائية ======
     def add_auto_role(self, level, role_id):
         self.c.execute("INSERT OR REPLACE INTO auto_roles (level, role_id) VALUES (?, ?)", (level, role_id))
         self.conn.commit()
@@ -87,7 +85,6 @@ class Database:
         self.c.execute("DELETE FROM auto_roles WHERE level = ?", (level,))
         self.conn.commit()
     
-    # ====== دوال الأدمن ======
     def is_admin(self, user_id):
         self.c.execute("SELECT * FROM admins WHERE user_id = ?", (user_id,))
         return self.c.fetchone() is not None
@@ -104,7 +101,6 @@ class Database:
         self.c.execute("SELECT user_id FROM admins")
         return [row[0] for row in self.c.fetchall()]
     
-    # ====== دوال المستويات ======
     def get_level_data(self, user_id):
         self.c.execute("SELECT xp, level FROM levels WHERE user_id = ?", (user_id,))
         return self.c.fetchone()
@@ -120,7 +116,6 @@ class Database:
         self.c.execute("SELECT user_id, level, xp FROM levels ORDER BY level DESC, xp DESC LIMIT ?", (limit,))
         return self.c.fetchall()
     
-    # ====== دوال التحذيرات ======
     def add_warning(self, user_id, reason, moderator_id):
         self.c.execute(
             "INSERT INTO warnings (user_id, reason, moderator_id, timestamp) VALUES (?, ?, ?, ?)",
@@ -137,7 +132,6 @@ class Database:
         self.c.execute("DELETE FROM warnings WHERE id = ? AND user_id = ?", (warn_id, user_id))
         self.conn.commit()
     
-    # ====== دوال التكتات ======
     def create_ticket(self, channel_id, user_id):
         self.c.execute(
             "INSERT INTO tickets (channel_id, user_id, created_at) VALUES (?, ?, ?)",
@@ -165,7 +159,6 @@ class Database:
         self.c.execute("SELECT * FROM tickets WHERE status = 'open'")
         return self.c.fetchall()
     
-    # ====== دوال الردود التلقائية ======
     def add_reply(self, trigger, response):
         self.c.execute("INSERT OR REPLACE INTO autoreply VALUES (?, ?)", (trigger.lower(), response))
         self.conn.commit()
