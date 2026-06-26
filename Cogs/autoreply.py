@@ -14,7 +14,6 @@ class AutoReply(commands.Cog):
         if message.author.bot:
             return
         
-        # التحقق من الردود التلقائية
         for trigger, response in db.get_all_replies():
             if trigger.lower() in message.content.lower():
                 await message.channel.send(response)
