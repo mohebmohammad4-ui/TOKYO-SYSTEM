@@ -13,7 +13,6 @@ class AntiSpam(commands.Cog):
         if message.author.bot:
             return
         
-        # تجاهل الأدمن
         if message.author.guild_permissions.administrator:
             return
         
@@ -22,27 +21,21 @@ class AntiSpam(commands.Cog):
         if user_id not in self.user_messages:
             self.user_messages[user_id] = []
         
-        # إضافة الوقت الحالي
         self.user_messages[user_id].append(datetime.now())
         
-        # حذف الرسائل القديمة
         cutoff = datetime.now() - timedelta(seconds=SPAM_WINDOW)
         self.user_messages[user_id] = [
             t for t in self.user_messages[user_id]
             if t > cutoff
         ]
         
-        # التحقق من السبام
         if len(self.user_messages[user_id]) > SPAM_LIMIT:
-            # تحذير العضو
             try:
                 await message.delete()
                 warning = await message.channel.send(
                     f"⚠️ {message.author.mention} ممنوع السبام!",
                     delete_after=5
                 )
-                
-                # تايم تلقائي لمدة 1 دقيقة
                 await message.author.timeout(
                     timedelta(minutes=1),
                     reason="سبام تلقائي"
