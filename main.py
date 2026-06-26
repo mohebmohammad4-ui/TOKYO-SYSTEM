@@ -6,12 +6,10 @@ import sys
 from config import TOKEN, PREFIX, COLORS
 from database import Database
 
-# ====== إعدادات البوت ======
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 db = Database()
 
-# ====== تحميل جميع الـ Cogs ======
 async def load_cogs():
     cogs_list = [
         'cogs.admin',
@@ -31,7 +29,6 @@ async def load_cogs():
         except Exception as e:
             print(f'❌ فشل تحميل {cog}: {e}')
 
-# ====== حدث تشغيل البوت ======
 @bot.event
 async def on_ready():
     print(f'✅ {bot.user} جاهز للعمل!')
@@ -44,12 +41,10 @@ async def on_ready():
         )
     )
 
-# ====== حدث بدء التشغيل ======
 @bot.event
 async def on_connect():
     print('🔄 جاري الاتصال بـ Discord...')
 
-# ====== أمر المساعدة الرئيسي ======
 @bot.command(name='help')
 async def help_command(ctx):
     embed = discord.Embed(
@@ -92,7 +87,6 @@ async def help_command(ctx):
     embed.set_footer(text="TOKYO COMMUNITY 🇯🇵 | صنع بحب ❤️")
     await ctx.send(embed=embed)
 
-# ====== تشغيل البوت ======
 async def main():
     try:
         async with bot:
