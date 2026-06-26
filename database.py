@@ -4,15 +4,12 @@ import os
 
 class Database:
     def __init__(self):
-        # التأكد من وجود مجلد data
         os.makedirs('data', exist_ok=True)
-        
         self.conn = sqlite3.connect('data/tokyo.db')
         self.c = self.conn.cursor()
         self.create_tables()
     
     def create_tables(self):
-        # ====== التحذيرات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS warnings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -21,12 +18,10 @@ class Database:
             timestamp TEXT
         )''')
         
-        # ====== الأدمن ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS admins (
             user_id INTEGER PRIMARY KEY
         )''')
         
-        # ====== المستويات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS levels (
             user_id INTEGER PRIMARY KEY,
             xp INTEGER DEFAULT 0,
@@ -34,7 +29,6 @@ class Database:
             total_messages INTEGER DEFAULT 0
         )''')
         
-        # ====== التكتات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS tickets (
             channel_id INTEGER PRIMARY KEY,
             user_id INTEGER,
@@ -43,55 +37,22 @@ class Database:
             created_at TEXT
         )''')
         
-        # ====== الردود التلقائية ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS autoreply (
             trigger TEXT PRIMARY KEY,
             response TEXT
         )''')
         
-        # ====== نشاط الفويس ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS voice_activity (
             user_id INTEGER PRIMARY KEY,
             total_minutes INTEGER DEFAULT 0,
             last_join TEXT
         )''')
         
-        # ====== الاقتراحات ======
-        self.c.execute('''CREATE TABLE IF NOT EXISTS suggestions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            suggestion TEXT,
-            upvotes INTEGER DEFAULT 0,
-            downvotes INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'pending',
-            message_id INTEGER
-        )''')
-        
-        # ====== السحوبات ======
-        self.c.execute('''CREATE TABLE IF NOT EXISTS giveaways (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            channel_id INTEGER,
-            prize TEXT,
-            winners INTEGER,
-            end_time TEXT,
-            participants TEXT DEFAULT '',
-            message_id INTEGER
-        )''')
-        
-        # ====== الرومات المؤقتة ======
-        self.c.execute('''CREATE TABLE IF NOT EXISTS temp_channels (
-            channel_id INTEGER PRIMARY KEY,
-            owner_id INTEGER,
-            created_at TEXT
-        )''')
-        
-        # ====== جدول الإعدادات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
         )''')
         
-        # ====== جدول الرتب التلقائية ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS auto_roles (
             level INTEGER PRIMARY KEY,
             role_id INTEGER
@@ -101,10 +62,7 @@ class Database:
     
     # ====== دوال الإعدادات ======
     def set_setting(self, key, value):
-        self.c.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-            (key, str(value))
-        )
+        self.c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
         self.conn.commit()
     
     def get_setting(self, key, default=None):
@@ -118,10 +76,7 @@ class Database:
     
     # ====== دوال الرتب التلقائية ======
     def add_auto_role(self, level, role_id):
-        self.c.execute(
-            "INSERT OR REPLACE INTO auto_roles (level, role_id) VALUES (?, ?)",
-            (level, role_id)
-        )
+        self.c.execute("INSERT OR REPLACE INTO auto_roles (level, role_id) VALUES (?, ?)", (level, role_id))
         self.conn.commit()
     
     def get_auto_roles(self):
