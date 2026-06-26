@@ -21,11 +21,7 @@ async def load_cogs():
         'cogs.welcome',
         'cogs.logs',
         'cogs.antispam',
-        'cogs.voice',
-        'cogs.premium',
-        'cogs.temp_channels',
-        'cogs.suggestions',
-        'cogs.giveaways'
+        'cogs.voice'
     ]
     
     for cog in cogs_list:
@@ -89,19 +85,7 @@ async def help_command(ctx):
     
     embed.add_field(
         name="🎊 الترحيب",
-        value="`!setwelcome` `!testwelcome`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="📝 الاقتراحات",
-        value="`!suggest` `!vote`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🎁 السحوبات",
-        value="`!giveaway` `!reroll`",
+        value="`!setwelcome`",
         inline=False
     )
     
