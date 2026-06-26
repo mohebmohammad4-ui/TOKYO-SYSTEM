@@ -1,17 +1,21 @@
 import discord
 from discord.ext import commands
 from datetime import datetime
-from config import LOG_CHANNEL_ID, COLORS
+from config import COLORS
+from database import Database
+
+db = Database()
 
 class Logs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
     async def send_log(self, embed):
-        if not LOG_CHANNEL_ID:
+        log_channel_id = db.get_setting('log_channel')
+        if not log_channel_id:
             return
         
-        channel = self.bot.get_channel(LOG_CHANNEL_ID)
+        channel = self.bot.get_channel(int(log_channel_id))
         if channel:
             await channel.send(embed=embed)
     
@@ -70,7 +74,6 @@ class Logs(commands.Cog):
     
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
-        # رصد تغيير الرتب
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         
