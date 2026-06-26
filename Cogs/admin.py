@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import datetime
 from config import COLORS, OWNER_ID
 from database import Database
@@ -11,11 +10,183 @@ class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    # ====== التحقق من الصلاحيات ======
     def is_authorized(self, user_id):
         return db.is_admin(user_id) or user_id == OWNER_ID
     
-    # ====== إضافة أدمن ======
+    # ====== 🔥 أوامر الإعدادات الجديدة ======
+    
+    @commands.command(name='setlog')
+    async def set_log_channel(self, ctx, channel: discord.TextChannel):
+        """تحديد قناة اللوقات"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        db.set_setting('log_channel', channel.id)
+        embed = discord.Embed(
+            title="✅ تم التحديد",
+            description=f"تم تحديد {channel.mention} كقناة للوقات.",
+            color=COLORS["success"]
+        )
+        await ctx.send(embed=embed)
+    
+    @commands.command(name='setwelcome')
+    async def set_welcome_channel(self, ctx, channel: discord.TextChannel):
+        """تحديد قناة الترحيب"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        db.set_setting('welcome_channel', channel.id)
+        embed = discord.Embed(
+            title="✅ تم التحديد",
+            description=f"تم تحديد {channel.mention} كقناة للترحيب.",
+            color=COLORS["success"]
+        )
+        await ctx.send(embed=embed)
+    
+    @commands.command(name='setticketcat')
+    async def set_ticket_category(self, ctx, category: discord.CategoryChannel):
+        """تحديد كاتيجوري التكتات"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        db.set_setting('ticket_category', category.id)
+        embed = discord.Embed(
+            title="✅ تم التحديد",
+            description=f"تم تحديد {category.name} ككاتيجوري للتكتات.",
+            color=COLORS["success"]
+        )
+        await ctx.send(embed=embed)
+    
+    @commands.command(name='setsupport')
+    async def set_support_role(self, ctx, role: discord.Role):
+        """تحديد رتبة الدعم"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        db.set_setting('support_role', role.id)
+        embed = discord.Embed(
+            title="✅ تم التحديد",
+            description=f"تم تحديد {role.mention} كرتبة للدعم.",
+            color=COLORS["success"]
+        )
+        await ctx.send(embed=embed)
+    
+    @commands.command(name='setautolevel')
+    async def set_auto_level_role(self, ctx, level: int, role: discord.Role):
+        """تحديد رتبة تلقائية لمستوى معين"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        db.add_auto_role(level, role.id)
+        embed = discord.Embed(
+            title="✅ تم التحديد",
+            description=f"عند الوصول للمستوى **{level}** سيتم إعطاء رتبة {role.mention}.",
+            color=COLORS["success"]
+        )
+        await ctx.send(embed=embed)
+    
+    @commands.command(name='removeautolevel')
+    async def remove_auto_level_role(self, ctx, level: int):
+        """حذف رتبة تلقائية"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        db.remove_auto_role(level)
+        embed = discord.Embed(
+            title="✅ تم الحذف",
+            description=f"تم إلغاء الرتبة التلقائية للمستوى **{level}**.",
+            color=COLORS["success"]
+        )
+        await ctx.send(embed=embed)
+    
+    @commands.command(name='premium')
+    async def manage_premium(self, ctx, action: str, member: discord.Member):
+        """إدارة الأعضاء Premium"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        if action.lower() == 'add':
+            db.set_setting(f'premium_{member.id}', 'true')
+            embed = discord.Embed(
+                title="✅ تمت الإضافة",
+                description=f"{member.mention} أصبح عضو Premium.",
+                color=COLORS["success"]
+            )
+        elif action.lower() == 'remove':
+            db.set_setting(f'premium_{member.id}', 'false')
+            embed = discord.Embed(
+                title="✅ تمت الإزالة",
+                description=f"تم إزالة {member.mention} من Premium.",
+                color=COLORS["success"]
+            )
+        else:
+            embed = discord.Embed(
+                title="❌ خطأ",
+                description="استخدم: `!premium add @user` أو `!premium remove @user`",
+                color=COLORS["danger"]
+            )
+        await ctx.send(embed=embed)
+    
+    @commands.command(name='settings')
+    async def show_settings(self, ctx):
+        """عرض جميع الإعدادات الحالية"""
+        if not self.is_authorized(ctx.author.id):
+            return await ctx.send("❌ ليس لديك صلاحية.")
+        
+        settings = db.get_all_settings()
+        auto_roles = db.get_auto_roles()
+        
+        embed = discord.Embed(
+            title="⚙️ إعدادات TOKYO SYSTEM",
+            color=COLORS["primary"]
+        )
+        
+        # القنوات
+        log_channel = settings.get('log_channel')
+        welcome_channel = settings.get('welcome_channel')
+        ticket_category = settings.get('ticket_category')
+        support_role = settings.get('support_role')
+        
+        embed.add_field(
+            name="📋 قناة اللوقات",
+            value=f"<#{log_channel}>" if log_channel else "❌ غير محددة",
+            inline=False
+        )
+        embed.add_field(
+            name="🎊 قناة الترحيب",
+            value=f"<#{welcome_channel}>" if welcome_channel else "❌ غير محددة",
+            inline=False
+        )
+        embed.add_field(
+            name="📁 كاتيجوري التكتات",
+            value=f"<#{ticket_category}>" if ticket_category else "❌ غير محددة",
+            inline=False
+        )
+        embed.add_field(
+            name="🛡️ رتبة الدعم",
+            value=f"<@&{support_role}>" if support_role else "❌ غير محددة",
+            inline=False
+        )
+        
+        # الرتب التلقائية
+        if auto_roles:
+            roles_text = "\n".join([f"المستوى {level} → <@&{role_id}>" for level, role_id in auto_roles])
+            embed.add_field(name="🏅 الرتب التلقائية", value=roles_text, inline=False)
+        else:
+            embed.add_field(name="🏅 الرتب التلقائية", value="❌ لا توجد", inline=False)
+        
+        # الأعضاء Premium
+        premium_users = [int(key.split('_')[1]) for key in settings if key.startswith('premium_') and settings[key] == 'true']
+        if premium_users:
+            users_text = "\n".join([f"<@{uid}>" for uid in premium_users])
+            embed.add_field(name="⭐ أعضاء Premium", value=users_text, inline=False)
+        else:
+            embed.add_field(name="⭐ أعضاء Premium", value="❌ لا يوجد", inline=False)
+        
+        await ctx.send(embed=embed)
+    
+    # ====== الأوامر القديمة (نفسها) ======
+    
     @commands.command(name='addadmin')
     async def add_admin(self, ctx, member: discord.Member):
         if not self.is_authorized(ctx.author.id):
@@ -35,7 +206,6 @@ class Admin(commands.Cog):
         )
         await ctx.send(embed=embed)
     
-    # ====== حذف أدمن ======
     @commands.command(name='removeadmin')
     async def remove_admin(self, ctx, member: discord.Member):
         if not self.is_authorized(ctx.author.id):
@@ -63,7 +233,6 @@ class Admin(commands.Cog):
         )
         await ctx.send(embed=embed)
     
-    # ====== بان ======
     @commands.command(name='ban')
     async def ban_member(self, ctx, member: discord.Member, *, reason="لا يوجد سبب"):
         if not self.is_authorized(ctx.author.id):
@@ -95,7 +264,6 @@ class Admin(commands.Cog):
             )
             await ctx.send(embed=embed)
     
-    # ====== تايم ======
     @commands.command(name='timeout')
     async def timeout_member(self, ctx, member: discord.Member, minutes: int, *, reason="لا يوجد سبب"):
         if not self.is_authorized(ctx.author.id):
@@ -128,7 +296,6 @@ class Admin(commands.Cog):
             )
             await ctx.send(embed=embed)
     
-    # ====== تحذير ======
     @commands.command(name='warn')
     async def warn_member(self, ctx, member: discord.Member, *, reason="لا يوجد سبب"):
         if not self.is_authorized(ctx.author.id):
@@ -152,7 +319,6 @@ class Admin(commands.Cog):
         embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
         await ctx.send(embed=embed)
         
-        # محاولة إرسال DM للعضو
         try:
             dm_embed = discord.Embed(
                 title="⚠️ تحذير من TOKYO COMMUNITY",
@@ -165,7 +331,6 @@ class Admin(commands.Cog):
         except:
             pass
     
-    # ====== عرض التحذيرات ======
     @commands.command(name='warnings')
     async def show_warnings(self, ctx, member: discord.Member):
         if not self.is_authorized(ctx.author.id):
@@ -204,7 +369,6 @@ class Admin(commands.Cog):
         
         await ctx.send(embed=embed)
     
-    # ====== حذف تحذير ======
     @commands.command(name='delwarn')
     async def delete_warning(self, ctx, member: discord.Member, warn_id: int):
         if not self.is_authorized(ctx.author.id):
