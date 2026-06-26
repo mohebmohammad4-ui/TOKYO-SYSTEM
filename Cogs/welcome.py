@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import random
-from config import COLORS, WELCOME_CHANNEL_ID, WELCOME_MESSAGES
+from config import COLORS, WELCOME_MESSAGES
 from database import Database
 
 db = Database()
@@ -12,17 +12,15 @@ class Welcome(commands.Cog):
     
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        if not WELCOME_CHANNEL_ID:
+        welcome_channel_id = db.get_setting('welcome_channel')
+        if not welcome_channel_id:
             return
         
-        channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
+        channel = member.guild.get_channel(int(welcome_channel_id))
         if not channel:
             return
         
-        # اختيار رسالة ترحيب عشوائية
         welcome_msg = random.choice(WELCOME_MESSAGES).format(member=member.mention)
-        
-        # عدد الأعضاء
         member_count = member.guild.member_count
         
         embed = discord.Embed(
@@ -39,10 +37,11 @@ class Welcome(commands.Cog):
     
     @commands.Cog.listener()
     async def on_member_remove(self, member):
-        if not WELCOME_CHANNEL_ID:
+        welcome_channel_id = db.get_setting('welcome_channel')
+        if not welcome_channel_id:
             return
         
-        channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
+        channel = member.guild.get_channel(int(welcome_channel_id))
         if not channel:
             return
         
