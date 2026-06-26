@@ -2,12 +2,12 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import datetime
-from config import COLORS, TICKET_CATEGORY_ID, SUPPORT_ROLE_ID, TICKET_OPEN_MESSAGE, TICKET_CLOSE_MESSAGE
+import asyncio
+from config import COLORS, TICKET_OPEN_MESSAGE, TICKET_CLOSE_MESSAGE
 from database import Database
 
 db = Database()
 
-# ====== أزرار التكت ======
 class TicketButtons(View):
     def __init__(self, bot, ticket_channel, user):
         super().__init__(timeout=None)
@@ -17,7 +17,6 @@ class TicketButtons(View):
     
     @discord.ui.button(label="🔒 إغلاق التكت", style=discord.ButtonStyle.danger, custom_id="close_ticket")
     async def close_button(self, interaction: discord.Interaction, button: Button):
-        # التحقق من أن المستخدم هو صاحب التكت أو أدمن
         ticket_data = db.get_ticket(self.ticket_channel.id)
         if not ticket_data:
             return await interaction.response.send_message("❌ هذا التكت غير موجود.", ephemeral=True)
@@ -32,7 +31,6 @@ class TicketButtons(View):
         if not (is_owner or is_assigned or is_admin):
             return await interaction.response.send_message("❌ ليس لديك صلاحية لإغلاق هذا التكت.", ephemeral=True)
         
-        # إغلاق التكت
         db.close_ticket(self.ticket_channel.id)
         
         embed = discord.Embed(
@@ -44,8 +42,6 @@ class TicketButtons(View):
         embed.set_footer(text="TOKYO COMMUNITY 🇯🇵")
         
         await interaction.response.send_message(embed=embed)
-        
-        # حذف الروم بعد 5 ثواني
         await asyncio.sleep(5)
         await self.ticket_channel.delete()
     
@@ -97,7 +93,19 @@ class Tickets(commands.Cog):
     
     @commands.command(name='ticket')
     async def create_ticket(self, ctx, *, reason="طلب دعم"):
-        # التحقق من وجود التكتات المفتوحة للعضو
+        # جلب الإعدادات
+        ticket_category_id = db.get_setting('ticket_category')
+        support_role_id = db.get_setting('support_role')
+        
+        if not ticket_category_id:
+            embed = discord.Embed(
+                title="❌ خطأ",
+                description="لم يتم تحديد كاتيجوري للتكتات بعد.\nاستخدم الأمر `!setticketcat #كاتيجوري`",
+                color=COLORS["danger"]
+            )
+            return await ctx.send(embed=embed)
+        
+        # التحقق من التكتات المفتوحة
         open_tickets = db.get_open_tickets()
         for ticket in open_tickets:
             if ticket[1] == ctx.author.id:
@@ -111,7 +119,14 @@ class Tickets(commands.Cog):
                     return await ctx.send(embed=embed, ephemeral=True)
         
         # إنشاء الروم
-        category = ctx.guild.get_channel(TICKET_CATEGORY_ID) if TICKET_CATEGORY_ID else None
+        category = ctx.guild.get_channel(int(ticket_category_id))
+        if not category:
+            embed = discord.Embed(
+                title="❌ خطأ",
+                description="الكاتيجوري المحددة غير موجودة. استخدم `!setticketcat` مرة أخرى.",
+                color=COLORS["danger"]
+            )
+            return await ctx.send(embed=embed)
         
         overwrites = {
             ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -120,8 +135,8 @@ class Tickets(commands.Cog):
         }
         
         # إضافة صلاحيات رتبة الدعم
-        if SUPPORT_ROLE_ID:
-            support_role = ctx.guild.get_role(SUPPORT_ROLE_ID)
+        if support_role_id:
+            support_role = ctx.guild.get_role(int(support_role_id))
             if support_role:
                 overwrites[support_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
         
@@ -132,13 +147,10 @@ class Tickets(commands.Cog):
             reason=f"تكت من {ctx.author}"
         )
         
-        # حفظ التكت في قاعدة البيانات
         db.create_ticket(channel.id, ctx.author.id)
         
-        # إنشاء الـ View مع الأزرار
         view = TicketButtons(self.bot, channel, ctx.author)
         
-        # إرسال رسالة التكت
         embed = discord.Embed(
             title="🎫 تكت جديد",
             description=f"مرحبًا {ctx.author.mention}!",
@@ -148,16 +160,15 @@ class Tickets(commands.Cog):
         embed.add_field(name="الحالة", value="🟢 مفتوح")
         embed.set_footer(text="TOKYO COMMUNITY 🇯🇵 | استخدم الأزرار للتحكم")
         
+        support_role_mention = f"<@&{support_role_id}>" if support_role_id else "الدعم"
         await channel.send(
             TICKET_OPEN_MESSAGE.format(
-                support_role=SUPPORT_ROLE_ID if SUPPORT_ROLE_ID else "الدعم",
+                support_role=support_role_mention,
                 member=ctx.author.mention
-            ),
-            view=view
+            )
         )
         await channel.send(embed=embed, view=view)
         
-        # تأكيد للعضو
         embed = discord.Embed(
             title="✅ تم إنشاء التكت",
             description=f"تم إنشاء تكتك في {channel.mention}",
@@ -167,12 +178,10 @@ class Tickets(commands.Cog):
     
     @commands.command(name='close')
     async def close_ticket_command(self, ctx):
-        # التحقق من أن الروم تكت
         ticket_data = db.get_ticket(ctx.channel.id)
         if not ticket_data:
             return await ctx.send("❌ هذه القناة ليست تكت.", ephemeral=True)
         
-        # التحقق من الصلاحية
         user_id = ticket_data[1]
         assigned_to = ticket_data[3]
         
@@ -191,7 +200,6 @@ class Tickets(commands.Cog):
             color=COLORS["danger"]
         )
         await ctx.send(embed=embed)
-        
         await asyncio.sleep(5)
         await ctx.channel.delete()
     
