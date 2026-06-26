@@ -1,7 +1,6 @@
 import os
 
 # ====== TOKEN & PREFIX ======
-# التوكن من Railway Variables
 TOKEN = os.getenv('TOKEN')
 if not TOKEN:
     raise ValueError("❌ التوكن غير موجود! ضعه في متغيرات البيئة TOKEN")
@@ -9,7 +8,7 @@ if not TOKEN:
 PREFIX = os.getenv('PREFIX', '!')
 OWNER_ID = int(os.getenv('OWNER_ID', 123456789))
 
-# ====== الألوان (ثيم TOKYO) ======
+# ====== الألوان ======
 COLORS = {
     "primary": 0x00d4ff,
     "danger": 0xff2d55,
