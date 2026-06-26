@@ -1,8 +1,7 @@
 import discord
 from discord.ext import commands
 import random
-import math
-from config import COLORS, XP_MIN, XP_MAX, MSG_MIN, MSG_MAX, LEVEL_REQS, AUTO_ROLES
+from config import COLORS, XP_MIN, XP_MAX, MSG_MIN, MSG_MAX, LEVEL_REQS
 from database import Database
 
 db = Database()
@@ -10,48 +9,44 @@ db = Database()
 class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.user_messages = {}  # لتتبع عدد الرسائل
+        self.user_messages = {}
     
-    # ====== حساب متطلبات المستوى ======
     def get_level_req(self, level):
         for lvl, req in sorted(LEVEL_REQS.items(), reverse=True):
             if level >= lvl:
                 return req
         return 200
     
-    # ====== مستمع الرسائل ======
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
         
-        # ====== منع السبام (تتبع الرسائل) ======
+        # ====== منع السبام ======
         if message.author.id not in self.user_messages:
             self.user_messages[message.author.id] = []
         
         self.user_messages[message.author.id].append(message.created_at)
-        
-        # حذف الرسائل القديمة من التتبع
         self.user_messages[message.author.id] = [
             t for t in self.user_messages[message.author.id]
             if (message.created_at - t).seconds < 60
         ]
         
-        # إذا أرسل أكثر من 10 رسائل في دقيقة = سبام
         if len(self.user_messages[message.author.id]) > 10:
             return
         
-        # ====== إضافة XP عشوائي ======
-        # فرصة 30% للحصول على XP
+        # ====== نظام XP ======
         if random.randint(1, 100) <= 30:
-            # عدد رسائل عشوائي بين MSG_MIN و MSG_MAX
             required_msgs = random.randint(MSG_MIN, MSG_MAX)
             
-            # إذا وصل لعدد الرسائل المطلوب
             if len(self.user_messages[message.author.id]) >= required_msgs:
                 xp_gain = random.randint(XP_MIN, XP_MAX)
                 
-                # جلب بيانات العضو الحالية
+                # التحقق من Premium
+                is_premium = db.get_setting(f'premium_{message.author.id}', 'false') == 'true'
+                if is_premium:
+                    xp_gain *= 2
+                
                 data = db.get_level_data(message.author.id)
                 
                 if data:
@@ -59,14 +54,12 @@ class Leveling(commands.Cog):
                     new_xp = current_xp + xp_gain
                     req = self.get_level_req(current_level)
                     
-                    # إذا تجاوز متطلبات المستوى
                     if new_xp >= req:
                         new_level = current_level + 1
                         remaining_xp = new_xp - req
                         
                         db.update_level(message.author.id, remaining_xp, new_level)
                         
-                        # رسالة الترقية
                         embed = discord.Embed(
                             title="🎉 ترقية مستوى!",
                             description=f"{message.author.mention} وصل إلى **مستوى {new_level}**!",
@@ -75,11 +68,11 @@ class Leveling(commands.Cog):
                         embed.set_footer(text="TOKYO COMMUNITY 🇯🇵")
                         await message.channel.send(embed=embed)
                         
-                        # ====== إعطاء رتبة تلقائية ======
-                        if new_level in AUTO_ROLES:
-                            role_id = AUTO_ROLES[new_level]
-                            if role_id:
-                                role = message.guild.get_role(role_id)
+                        # ====== 🔥 الرتب التلقائية من قاعدة البيانات ======
+                        auto_roles = db.get_auto_roles()
+                        for level, role_id in auto_roles:
+                            if new_level == level:
+                                role = message.guild.get_role(int(role_id))
                                 if role:
                                     try:
                                         await message.author.add_roles(role)
@@ -94,10 +87,8 @@ class Leveling(commands.Cog):
                     else:
                         db.update_level(message.author.id, new_xp, current_level)
                 else:
-                    # أول مرة يحصل على XP
                     db.update_level(message.author.id, xp_gain, 0)
     
-    # ====== عرض الرتبة ======
     @commands.command(name='rank', aliases=['level'])
     async def show_rank(self, ctx, member: discord.Member = None):
         member = member or ctx.author
@@ -125,7 +116,6 @@ class Leveling(commands.Cog):
         embed.add_field(name="⭐ النقاط", value=f"**{xp}/{req}**", inline=True)
         embed.add_field(name="📈 التقدم", value=f"**{progress}%**", inline=True)
         
-        # شريط التقدم
         bar_length = 20
         filled = int((progress / 100) * bar_length)
         bar = "▰" * filled + "▱" * (bar_length - filled)
@@ -134,7 +124,6 @@ class Leveling(commands.Cog):
         embed.set_footer(text="TOKYO COMMUNITY 🇯🇵")
         await ctx.send(embed=embed)
     
-    # ====== لوحة المتصدرين ======
     @commands.command(name='leaderboard', aliases=['lb', 'top'])
     async def show_leaderboard(self, ctx, limit: int = 10):
         if limit > 20:
