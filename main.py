@@ -1,119 +1,62 @@
-import discord
-from discord.ext import commands
 import os
-import asyncio
-from config import TOKEN, PREFIX, COLORS
-from database import Database
 
-# ====== إعدادات البوت ======
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
-db = Database()
+# ====== TOKEN & PREFIX ======
+# التوكن من Railway Variables
+TOKEN = os.getenv('TOKEN')
+if not TOKEN:
+    raise ValueError("❌ التوكن غير موجود! ضعه في متغيرات البيئة TOKEN")
 
-# ====== تحميل جميع الـ Cogs ======
-async def load_cogs():
-    cogs_list = [
-        'cogs.admin',
-        'cogs.leveling',
-        'cogs.tickets',
-        'cogs.autoreply',
-        'cogs.welcome',
-        'cogs.logs',
-        'cogs.antispam',
-        'cogs.autoroles',
-        'cogs.voice',
-        'cogs.premium',
-        'cogs.temp_channels',
-        'cogs.suggestions',
-        'cogs.giveaways'
-    ]
-    
-    for cog in cogs_list:
-        try:
-            await bot.load_extension(cog)
-            print(f'✅ تم تحميل {cog}')
-        except Exception as e:
-            print(f'❌ فشل تحميل {cog}: {e}')
+PREFIX = os.getenv('PREFIX', '!')
+OWNER_ID = int(os.getenv('OWNER_ID', 123456789))
 
-# ====== حدث تشغيل البوت ======
-@bot.event
-async def on_ready():
-    print(f'✅ {bot.user} جاهز للعمل!')
-    print(f'📊 شغال على {len(bot.guilds)} سيرفرات')
-    
-    # تغيير حالة البوت
-    await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name="TOKYO COMMUNITY 🇯🇵"
-        )
-    )
+# ====== الألوان (ثيم TOKYO) ======
+COLORS = {
+    "primary": 0x00d4ff,
+    "danger": 0xff2d55,
+    "success": 0x00ff88,
+    "warning": 0xffd700,
+    "purple": 0x7b2ffc,
+    "dark": 0x0a0a0a,
+    "pink": 0xff2d95,
+    "gold": 0xffd700
+}
 
-# ====== حدث بدء التشغيل ======
-@bot.event
-async def on_connect():
-    print('🔄 جاري الاتصال بـ Discord...')
+# ====== نظام XP ======
+XP_MIN = int(os.getenv('XP_MIN', 1))
+XP_MAX = int(os.getenv('XP_MAX', 5))
+MSG_MIN = int(os.getenv('MSG_MIN', 3))
+MSG_MAX = int(os.getenv('MSG_MAX', 5))
 
-# ====== أمر المساعدة الرئيسي ======
-@bot.command(name='help')
-async def help_command(ctx):
-    embed = discord.Embed(
-        title="🎌 TOKYO SYSTEM - قائمة الأوامر",
-        description="جميع أوامر البوت مقسمة حسب الأنظمة",
-        color=COLORS["primary"]
-    )
-    embed.set_thumbnail(url=bot.user.display_avatar.url)
-    
-    embed.add_field(
-        name="🛡️ الإدارة",
-        value="`!ban` `!timeout` `!warn` `!warnings` `!delwarn` `!addadmin` `!removeadmin`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="📈 المستويات",
-        value="`!rank` `!leaderboard`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🎫 التكتات",
-        value="`!ticket` `!close` `!claim` `!unclaim`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🤖 الردود التلقائية",
-        value="`!addreply` `!delreply` `!replies`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🎊 الترحيب",
-        value="`!setwelcome` `!testwelcome`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="📝 الاقتراحات",
-        value="`!suggest` `!vote`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🎁 السحوبات",
-        value="`!giveaway` `!reroll`",
-        inline=False
-    )
-    
-    embed.set_footer(text="TOKYO COMMUNITY 🇯🇵 | صنع بحب ❤️")
-    await ctx.send(embed=embed)
+# ====== متطلبات المستويات ======
+LEVEL_REQS = {
+    0: 200,
+    5: 400,
+    10: 800,
+    15: 1000
+}
 
-# ====== تشغيل البوت ======
-async def main():
-    async with bot:
-        await load_cogs()
-        await bot.start(TOKEN)
+# ====== Anti-Spam ======
+SPAM_LIMIT = int(os.getenv('SPAM_LIMIT', 5))
+SPAM_WINDOW = int(os.getenv('SPAM_WINDOW', 5))
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# ====== رسائل الترحيب ======
+WELCOME_MESSAGES = [
+    "🎌 **{member}** مرحبًا بك في **TOKYO COMMUNITY**!",
+    "🇯🇵 أهلاً {member} في طوكيو! استمتع معنا 💫",
+    "🌸 نورت السيرفر {member}! TOKYO COMMUNITY تفتخر بك ✨"
+]
+
+# ====== رسائل التكت ======
+TICKET_OPEN_MESSAGE = """
+🎫 **تم فتح تكت جديد!**
+
+<@&{support_role}> مطلوب دعم للعضو {member}
+
+**الرجاء الضغط على زر الاستلام للتعامل مع التكت.**
+"""
+
+TICKET_CLOSE_MESSAGE = """
+🔒 **تم إغلاق التكت**
+
+شكراً لاستخدامك نظام الدعم في **TOKYO COMMUNITY** 🇯🇵
+"""
