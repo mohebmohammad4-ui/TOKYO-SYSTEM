@@ -1,9 +1,13 @@
-import discord
+import os
 
 # ====== TOKEN & PREFIX ======
-TOKEN = "YOUR_BOT_TOKEN_HERE"
-PREFIX = "!"
-OWNER_ID = 123456789  # ضع ID حسابك
+# التوكن من Railway Variables
+TOKEN = os.getenv('TOKEN')
+if not TOKEN:
+    raise ValueError("❌ التوكن غير موجود! ضعه في متغيرات البيئة TOKEN")
+
+PREFIX = os.getenv('PREFIX', '!')
+OWNER_ID = int(os.getenv('OWNER_ID', 123456789))
 
 # ====== الألوان (ثيم TOKYO) ======
 COLORS = {
@@ -18,10 +22,10 @@ COLORS = {
 }
 
 # ====== نظام XP ======
-XP_MIN = 1
-XP_MAX = 5
-MSG_MIN = 3
-MSG_MAX = 5
+XP_MIN = int(os.getenv('XP_MIN', 1))
+XP_MAX = int(os.getenv('XP_MAX', 5))
+MSG_MIN = int(os.getenv('MSG_MIN', 3))
+MSG_MAX = int(os.getenv('MSG_MAX', 5))
 
 # ====== متطلبات المستويات ======
 LEVEL_REQS = {
@@ -31,15 +35,9 @@ LEVEL_REQS = {
     15: 1000
 }
 
-# ====== الرتب التلقائية ======
-AUTO_ROLES = {}  # هتتضاف عن طريق الأمر !setautolevel
-
-# ====== أعضاء Premium ======
-PREMIUM_USERS = []  # هتتضاف عن طريق الأمر !premium
-
 # ====== Anti-Spam ======
-SPAM_LIMIT = 5
-SPAM_WINDOW = 5
+SPAM_LIMIT = int(os.getenv('SPAM_LIMIT', 5))
+SPAM_WINDOW = int(os.getenv('SPAM_WINDOW', 5))
 
 # ====== رسائل الترحيب ======
 WELCOME_MESSAGES = [
