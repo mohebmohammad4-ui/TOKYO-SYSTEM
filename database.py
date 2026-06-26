@@ -1,14 +1,18 @@
 import sqlite3
 from datetime import datetime
+import os
 
 class Database:
     def __init__(self):
+        # التأكد من وجود مجلد data
+        os.makedirs('data', exist_ok=True)
+        
         self.conn = sqlite3.connect('data/tokyo.db')
         self.c = self.conn.cursor()
         self.create_tables()
     
     def create_tables(self):
-        # ====== الجداول القديمة ======
+        # ====== التحذيرات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS warnings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -17,10 +21,12 @@ class Database:
             timestamp TEXT
         )''')
         
+        # ====== الأدمن ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS admins (
             user_id INTEGER PRIMARY KEY
         )''')
         
+        # ====== المستويات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS levels (
             user_id INTEGER PRIMARY KEY,
             xp INTEGER DEFAULT 0,
@@ -28,6 +34,7 @@ class Database:
             total_messages INTEGER DEFAULT 0
         )''')
         
+        # ====== التكتات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS tickets (
             channel_id INTEGER PRIMARY KEY,
             user_id INTEGER,
@@ -36,17 +43,20 @@ class Database:
             created_at TEXT
         )''')
         
+        # ====== الردود التلقائية ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS autoreply (
             trigger TEXT PRIMARY KEY,
             response TEXT
         )''')
         
+        # ====== نشاط الفويس ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS voice_activity (
             user_id INTEGER PRIMARY KEY,
             total_minutes INTEGER DEFAULT 0,
             last_join TEXT
         )''')
         
+        # ====== الاقتراحات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS suggestions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -57,6 +67,7 @@ class Database:
             message_id INTEGER
         )''')
         
+        # ====== السحوبات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS giveaways (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             channel_id INTEGER,
@@ -67,21 +78,28 @@ class Database:
             message_id INTEGER
         )''')
         
+        # ====== الرومات المؤقتة ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS temp_channels (
             channel_id INTEGER PRIMARY KEY,
             owner_id INTEGER,
             created_at TEXT
         )''')
         
-        # ====== 🔥 جدول الإعدادات الجديد ======
+        # ====== جدول الإعدادات ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
         )''')
         
+        # ====== جدول الرتب التلقائية ======
+        self.c.execute('''CREATE TABLE IF NOT EXISTS auto_roles (
+            level INTEGER PRIMARY KEY,
+            role_id INTEGER
+        )''')
+        
         self.conn.commit()
     
-    # ====== 🔥 دوال الإعدادات ======
+    # ====== دوال الإعدادات ======
     def set_setting(self, key, value):
         self.c.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
@@ -98,7 +116,7 @@ class Database:
         self.c.execute("SELECT * FROM settings")
         return {key: value for key, value in self.c.fetchall()}
     
-    # ====== دوال AUTO_ROLES ======
+    # ====== دوال الرتب التلقائية ======
     def add_auto_role(self, level, role_id):
         self.c.execute(
             "INSERT OR REPLACE INTO auto_roles (level, role_id) VALUES (?, ?)",
@@ -114,7 +132,7 @@ class Database:
         self.c.execute("DELETE FROM auto_roles WHERE level = ?", (level,))
         self.conn.commit()
     
-    # ====== الدوال القديمة (محسنة) ======
+    # ====== دوال الأدمن ======
     def is_admin(self, user_id):
         self.c.execute("SELECT * FROM admins WHERE user_id = ?", (user_id,))
         return self.c.fetchone() is not None
@@ -131,6 +149,7 @@ class Database:
         self.c.execute("SELECT user_id FROM admins")
         return [row[0] for row in self.c.fetchall()]
     
+    # ====== دوال المستويات ======
     def get_level_data(self, user_id):
         self.c.execute("SELECT xp, level FROM levels WHERE user_id = ?", (user_id,))
         return self.c.fetchone()
@@ -146,6 +165,7 @@ class Database:
         self.c.execute("SELECT user_id, level, xp FROM levels ORDER BY level DESC, xp DESC LIMIT ?", (limit,))
         return self.c.fetchall()
     
+    # ====== دوال التحذيرات ======
     def add_warning(self, user_id, reason, moderator_id):
         self.c.execute(
             "INSERT INTO warnings (user_id, reason, moderator_id, timestamp) VALUES (?, ?, ?, ?)",
@@ -162,6 +182,7 @@ class Database:
         self.c.execute("DELETE FROM warnings WHERE id = ? AND user_id = ?", (warn_id, user_id))
         self.conn.commit()
     
+    # ====== دوال التكتات ======
     def create_ticket(self, channel_id, user_id):
         self.c.execute(
             "INSERT INTO tickets (channel_id, user_id, created_at) VALUES (?, ?, ?)",
@@ -189,6 +210,7 @@ class Database:
         self.c.execute("SELECT * FROM tickets WHERE status = 'open'")
         return self.c.fetchall()
     
+    # ====== دوال الردود التلقائية ======
     def add_reply(self, trigger, response):
         self.c.execute("INSERT OR REPLACE INTO autoreply VALUES (?, ?)", (trigger.lower(), response))
         self.conn.commit()
