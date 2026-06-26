@@ -93,7 +93,6 @@ class Tickets(commands.Cog):
     
     @commands.command(name='ticket')
     async def create_ticket(self, ctx, *, reason="طلب دعم"):
-        # جلب الإعدادات
         ticket_category_id = db.get_setting('ticket_category')
         support_role_id = db.get_setting('support_role')
         
@@ -105,7 +104,6 @@ class Tickets(commands.Cog):
             )
             return await ctx.send(embed=embed)
         
-        # التحقق من التكتات المفتوحة
         open_tickets = db.get_open_tickets()
         for ticket in open_tickets:
             if ticket[1] == ctx.author.id:
@@ -118,7 +116,6 @@ class Tickets(commands.Cog):
                     )
                     return await ctx.send(embed=embed, ephemeral=True)
         
-        # إنشاء الروم
         category = ctx.guild.get_channel(int(ticket_category_id))
         if not category:
             embed = discord.Embed(
@@ -134,7 +131,6 @@ class Tickets(commands.Cog):
             ctx.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
         
-        # إضافة صلاحيات رتبة الدعم
         if support_role_id:
             support_role = ctx.guild.get_role(int(support_role_id))
             if support_role:
