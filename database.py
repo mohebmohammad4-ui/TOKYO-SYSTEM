@@ -8,7 +8,7 @@ class Database:
         self.conn = sqlite3.connect('data/tokyo.db')
         self.c = self.conn.cursor()
         self.create_tables()
-    
+ 
     def create_tables(self):
         self.c.execute('''CREATE TABLE IF NOT EXISTS warnings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
