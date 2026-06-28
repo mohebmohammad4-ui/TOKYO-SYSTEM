@@ -20,7 +20,12 @@ async def load_cogs():
         'cogs.logs',
         'cogs.antispam',
         'cogs.voice',
-        'cogs.slash_commands'  # ➕ نظام الأوامر المائلة
+        'cogs.autoroles',
+        'cogs.colors',
+        'cogs.self_roles',
+        'cogs.starboard',
+        'cogs.temp_channels',
+        'cogs.notifications'
     ]
     
     for cog in cogs_list:
