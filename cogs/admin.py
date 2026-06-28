@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import re
 import datetime
-from config import COLORS, OWNER_ID
+from config import COLORS, OWNER_ID, BASE_ADMIN_ROLE_ID
 from database import Database
 
 db = Database()
@@ -15,31 +15,40 @@ class Admin(commands.Cog):
     def is_authorized(self, user_id):
         return db.is_admin(user_id) or user_id == OWNER_ID
 
+    # ====== التحقق من أن العضو لديه رتبة إدارية (أعلى من الرتبة الأساسية) ======
+    def is_admin_role(self, member):
+        """التحقق مما إذا كان العضو لديه أي رتبة إدارية (أعلى من الرتبة الأساسية)"""
+        base_role = member.guild.get_role(BASE_ADMIN_ROLE_ID)
+        if not base_role:
+            return False
+
+        for role in member.roles:
+            if role.position >= base_role.position:
+                return True
+        return False
+
     # ====== نظام الصلاحيات الهرمي ======
     def has_command_permission(self, member):
         """التحقق من صلاحية العضو بناءً على الرتبة الهرمية"""
-        # المالك عنده كل الصلاحيات
         if member.id == OWNER_ID:
             return True
-        
-        # الأدمن في البوت عنده كل الصلاحيات
         if db.is_admin(member.id):
             return True
-        
+
         # جلب رتبة الصلاحيات من قاعدة البيانات
         command_role_id = db.get_setting('command_role')
         if not command_role_id:
             return False
-        
+
         command_role = member.guild.get_role(int(command_role_id))
         if not command_role:
             return False
-        
+
         # التحقق: إذا كان العضو عنده الرتبة أو رتبة أعلى منها
         for role in member.roles:
             if role.position >= command_role.position:
                 return True
-        
+
         return False
 
     # ====== دالة تحويل الوقت ======
@@ -81,8 +90,19 @@ class Admin(commands.Cog):
         if message.author.bot:
             return
 
+        # ====== التحقق من أن العضو لديه رتبة إدارية ======
+        if not self.is_admin_role(message.author):
+            return
+
         # ====== التحقق من الصلاحية الهرمية ======
         if not self.has_command_permission(message.author):
+            embed = discord.Embed(
+                title="❌ لا يوجد صلاحية",
+                description=f"{message.author.mention}، ليس لديك صلاحية لاستخدام هذا الأمر.",
+                color=COLORS["danger"]
+            )
+            await message.channel.send(embed=embed)
+            await message.delete()
             return
 
         # ====== أمر التايم ======
