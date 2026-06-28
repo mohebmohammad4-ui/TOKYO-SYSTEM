@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import re
 import datetime
 from config import COLORS, OWNER_ID
@@ -14,12 +15,20 @@ class Admin(commands.Cog):
     def is_authorized(self, user_id):
         return db.is_admin(user_id) or user_id == OWNER_ID
 
+    # ====== التحقق من رتبة الصلاحيات ======
+    def has_command_role(self, member):
+        """التحقق إذا كان العضو عنده رتبة الصلاحيات من قاعدة البيانات"""
+        role_id = db.get_setting('command_role')
+        if not role_id:
+            return False
+        role = member.guild.get_role(int(role_id))
+        if not role:
+            return False
+        return role in member.roles
+
     # ====== دالة تحويل الوقت ======
     def parse_time(self, time_str):
-        """تحويل نص الوقت إلى timedelta"""
         total_seconds = 0
-        
-        # استخراج الأرقام والوحدات (مثال: 1w2d3h4m)
         pattern = r'(\d+)([wdhm])'
         matches = re.findall(pattern, time_str.lower())
         
@@ -39,17 +48,29 @@ class Admin(commands.Cog):
         
         return datetime.timedelta(seconds=total_seconds) if total_seconds > 0 else None
 
-    # ====== نظام قراءة الشات ======
+    # ====== دالة تصحيح الأخطاء ======
+    def get_command_help(self, command_name):
+        helps = {
+            'تايم': '`تايم @user وقت سبب`\nمثال: `تايم @أحمد 5m سبام`\nالوقت: `5m` (دقائق)، `2h` (ساعات)، `1d` (أيام)، `1w` (أسابيع)',
+            'بان': '`بان @user سبب`\nمثال: `بان @أحمد شتائم`',
+            'تحذير': '`تحذير @user سبب`\nمثال: `تحذير @أحمد مخالفة`',
+            'تحذيرات': '`تحذيرات @user`\nمثال: `تحذيرات @أحمد`',
+            'حذف_تحذير': '`حذف_تحذير @user رقم`\nمثال: `حذف_تحذير @أحمد 2`'
+        }
+        return helps.get(command_name, "الأمر غير معروف")
+
+    # ====== نظام قراءة الشات (يشتغل فقط مع الرتبة المحددة) ======
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
 
-        if not (db.is_admin(message.author.id) or message.author.id == OWNER_ID):
+        # ====== التحقق من الرتبة ======
+        if not self.has_command_role(message.author):
+            # إذا ما عنده الرتبة، يسكت وما يرد
             return
 
-        # ====== أمر التايم (بالصيغ الجديدة) ======
-        # مثال: "تايم @أحمد 5m سبام" أو "تايم @أحمد 1w2d سبام"
+        # ====== أمر التايم ======
         match = re.match(r'تايم\s+<@!?(\d+)>\s+([\dwdhm]+)(?:\s+(.+))?', message.content)
         if match:
             user_id = int(match.group(1))
@@ -59,11 +80,17 @@ class Admin(commands.Cog):
             duration = self.parse_time(time_str)
             if not duration:
                 embed = discord.Embed(
-                    title="❌ خطأ",
-                    description="صيغة الوقت غير صحيحة. استخدم:\n`5m` (دقائق)\n`2h` (ساعات)\n`1d` (أيام)\n`1w` (أسابيع)\nمثال: `تايم @أحمد 1w2d3h مخالفة`",
+                    title="❌ صيغة الوقت غير صحيحة",
+                    description=f"{message.author.mention}، الصيغة غير صحيحة.",
                     color=COLORS["danger"]
                 )
+                embed.add_field(
+                    name="📖 الطريقة الصحيحة",
+                    value=self.get_command_help('تايم'),
+                    inline=False
+                )
                 await message.channel.send(embed=embed)
+                await message.delete()
                 return
 
             member = message.guild.get_member(user_id)
@@ -71,7 +98,6 @@ class Admin(commands.Cog):
                 try:
                     await member.timeout(duration, reason=reason)
                     
-                    # تنسيق مدة التايم
                     total_seconds = duration.total_seconds()
                     days = int(total_seconds // 86400)
                     hours = int((total_seconds % 86400) // 3600)
@@ -97,7 +123,12 @@ class Admin(commands.Cog):
                     await message.channel.send(embed=embed)
                     await message.delete()
                 except Exception as e:
-                    await message.channel.send(f"❌ خطأ: {str(e)}")
+                    embed = discord.Embed(
+                        title="❌ خطأ",
+                        description=f"حدث خطأ: {str(e)}",
+                        color=COLORS["danger"]
+                    )
+                    await message.channel.send(embed=embed)
             return
 
         # ====== أمر الحظر ======
@@ -105,6 +136,21 @@ class Admin(commands.Cog):
         if match:
             user_id = int(match.group(1))
             reason = match.group(2) or "لا يوجد سبب"
+
+            if not message.mentions:
+                embed = discord.Embed(
+                    title="❌ خطأ في الصيغة",
+                    description=f"{message.author.mention}، يجب أن تمنشن العضو.",
+                    color=COLORS["danger"]
+                )
+                embed.add_field(
+                    name="📖 الطريقة الصحيحة",
+                    value=self.get_command_help('بان'),
+                    inline=False
+                )
+                await message.channel.send(embed=embed)
+                await message.delete()
+                return
 
             member = message.guild.get_member(user_id)
             if member:
@@ -121,7 +167,12 @@ class Admin(commands.Cog):
                     await message.channel.send(embed=embed)
                     await message.delete()
                 except Exception as e:
-                    await message.channel.send(f"❌ خطأ: {str(e)}")
+                    embed = discord.Embed(
+                        title="❌ خطأ",
+                        description=f"حدث خطأ: {str(e)}",
+                        color=COLORS["danger"]
+                    )
+                    await message.channel.send(embed=embed)
             return
 
         # ====== أمر التحذير ======
@@ -129,6 +180,21 @@ class Admin(commands.Cog):
         if match:
             user_id = int(match.group(1))
             reason = match.group(2) or "لا يوجد سبب"
+
+            if not message.mentions:
+                embed = discord.Embed(
+                    title="❌ خطأ في الصيغة",
+                    description=f"{message.author.mention}، يجب أن تمنشن العضو.",
+                    color=COLORS["danger"]
+                )
+                embed.add_field(
+                    name="📖 الطريقة الصحيحة",
+                    value=self.get_command_help('تحذير'),
+                    inline=False
+                )
+                await message.channel.send(embed=embed)
+                await message.delete()
+                return
 
             member = message.guild.get_member(user_id)
             if member:
@@ -214,97 +280,199 @@ class Admin(commands.Cog):
                 await message.delete()
             return
 
-    # ====== الأوامر القديمة (للأدمن) ======
-    @commands.command(name='addadmin')
-    async def add_admin(self, ctx, member: discord.Member):
-        if not self.is_authorized(ctx.author.id):
+    # ====== أوامر / (Slash Commands) ======
+    
+    @app_commands.command(name="setcommandrole", description="تحديد رتبة الصلاحيات للأوامر الصوتية")
+    @app_commands.describe(role="الرتبة المطلوبة لاستخدام الأوامر الصوتية")
+    async def set_command_role(self, interaction: discord.Interaction, role: discord.Role):
+        if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.set_setting('command_role', role.id)
+        embed = discord.Embed(
+            title="✅ تم التحديد",
+            description=f"تم تحديد رتبة {role.mention} كرتبة الصلاحيات للأوامر الصوتية.",
+            color=COLORS["success"]
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="addadmin", description="إضافة عضو كأدمن في البوت")
+    @app_commands.describe(member="العضو المراد إضافته")
+    async def add_admin_slash(self, interaction: discord.Interaction, member: discord.Member):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
         db.add_admin(member.id)
         embed = discord.Embed(title="✅ تمت الإضافة", description=f"تم إضافة {member.mention} كأدمن.", color=COLORS["success"])
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(name='removeadmin')
-    async def remove_admin(self, ctx, member: discord.Member):
-        if not self.is_authorized(ctx.author.id):
+    @app_commands.command(name="removeadmin", description="إزالة عضو من أدمن البوت")
+    @app_commands.describe(member="العضو المراد إزالته")
+    async def remove_admin_slash(self, interaction: discord.Interaction, member: discord.Member):
+        if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
         if member.id == OWNER_ID:
             embed = discord.Embed(title="❌ خطأ", description="لا يمكن إزالة المالك.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
         db.remove_admin(member.id)
         embed = discord.Embed(title="✅ تمت الإزالة", description=f"تم إزالة {member.mention} من الأدمن.", color=COLORS["success"])
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
-    # ====== أوامر الإعدادات ======
-    @commands.command(name='setlog')
-    async def set_log_channel(self, ctx, channel: discord.TextChannel):
-        if not self.is_authorized(ctx.author.id):
+    @app_commands.command(name="ban", description="حظر عضو من السيرفر")
+    @app_commands.describe(member="العضو المراد حظره", reason="سبب الحظر")
+    async def ban_slash(self, interaction: discord.Interaction, member: discord.Member, reason: str = "لا يوجد سبب"):
+        if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        db.set_setting('log_channel', channel.id)
-        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {channel.mention} كقناة للوقات.", color=COLORS["success"])
-        await ctx.send(embed=embed)
+        try:
+            await member.ban(reason=reason)
+            embed = discord.Embed(
+                title="🚫 تم الحظر",
+                description=f"تم حظر {member.mention}",
+                color=COLORS["danger"]
+            )
+            embed.add_field(name="السبب", value=reason)
+            embed.add_field(name="المشرف", value=interaction.user.mention)
+            embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            embed = discord.Embed(title="❌ خطأ", description=f"حدث خطأ: {str(e)}", color=COLORS["danger"])
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @commands.command(name='setwelcome')
-    async def set_welcome_channel(self, ctx, channel: discord.TextChannel):
-        if not self.is_authorized(ctx.author.id):
+    @app_commands.command(name="timeout", description="وضع عضو في تايم")
+    @app_commands.describe(member="العضو", duration="المدة (مثال: 5m, 2h, 1d, 1w)", reason="سبب التايم")
+    async def timeout_slash(self, interaction: discord.Interaction, member: discord.Member, duration: str, reason: str = "لا يوجد سبب"):
+        if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        db.set_setting('welcome_channel', channel.id)
-        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {channel.mention} كقناة للترحيب.", color=COLORS["success"])
-        await ctx.send(embed=embed)
-
-    @commands.command(name='setticketcat')
-    async def set_ticket_category(self, ctx, category: discord.CategoryChannel):
-        if not self.is_authorized(ctx.author.id):
-            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+        time_delta = self.parse_time(duration)
+        if not time_delta:
+            embed = discord.Embed(
+                title="❌ صيغة الوقت غير صحيحة",
+                description="استخدم: `5m` (دقائق)، `2h` (ساعات)، `1d` (أيام)، `1w` (أسابيع)",
+                color=COLORS["danger"]
+            )
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        db.set_setting('ticket_category', category.id)
-        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {category.name} ككاتيجوري للتكتات.", color=COLORS["success"])
-        await ctx.send(embed=embed)
+        try:
+            await member.timeout(time_delta, reason=reason)
+            total_seconds = time_delta.total_seconds()
+            days = int(total_seconds // 86400)
+            hours = int((total_seconds % 86400) // 3600)
+            minutes = int((total_seconds % 3600) // 60)
+            
+            time_text = ""
+            if days > 0:
+                time_text += f"{days} يوم "
+            if hours > 0:
+                time_text += f"{hours} ساعة "
+            if minutes > 0:
+                time_text += f"{minutes} دقيقة"
+            
+            embed = discord.Embed(
+                title="⏰ تم التايم",
+                description=f"تم وضع {member.mention} في تايم لمدة **{time_text}**",
+                color=COLORS["warning"]
+            )
+            embed.add_field(name="السبب", value=reason)
+            embed.add_field(name="المشرف", value=interaction.user.mention)
+            embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            embed = discord.Embed(title="❌ خطأ", description=f"حدث خطأ: {str(e)}", color=COLORS["danger"])
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @commands.command(name='setsupport')
-    async def set_support_role(self, ctx, role: discord.Role):
-        if not self.is_authorized(ctx.author.id):
+    @app_commands.command(name="warn", description="إعطاء تحذير لعضو")
+    @app_commands.describe(member="العضو", reason="سبب التحذير")
+    async def warn_slash(self, interaction: discord.Interaction, member: discord.Member, reason: str = "لا يوجد سبب"):
+        if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        db.set_setting('support_role', role.id)
-        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {role.mention} كرتبة للدعم.", color=COLORS["success"])
-        await ctx.send(embed=embed)
+        warn_id = db.add_warning(member.id, reason, interaction.user.id)
+        embed = discord.Embed(
+            title="⚠️ تم التحذير",
+            description=f"تم تحذير {member.mention}",
+            color=COLORS["warning"]
+        )
+        embed.add_field(name="السبب", value=reason)
+        embed.add_field(name="المشرف", value=interaction.user.mention)
+        embed.add_field(name="رقم التحذير", value=f"#{warn_id}")
+        embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(name='setautolevel')
-    async def set_auto_level_role(self, ctx, level: int, role: discord.Role):
-        if not self.is_authorized(ctx.author.id):
+    @app_commands.command(name="warnings", description="عرض تحذيرات العضو")
+    @app_commands.describe(member="العضو")
+    async def warnings_slash(self, interaction: discord.Interaction, member: discord.Member):
+        if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        db.add_auto_role(level, role.id)
-        embed = discord.Embed(title="✅ تم التحديد", description=f"عند الوصول للمستوى **{level}** سيتم إعطاء رتبة {role.mention}.", color=COLORS["success"])
-        await ctx.send(embed=embed)
-
-    @commands.command(name='removeautolevel')
-    async def remove_auto_level_role(self, ctx, level: int):
-        if not self.is_authorized(ctx.author.id):
-            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+        warnings = db.get_warnings(member.id)
         
-        db.remove_auto_role(level)
-        embed = discord.Embed(title="✅ تم الحذف", description=f"تم إلغاء الرتبة التلقائية للمستوى **{level}**.", color=COLORS["success"])
-        await ctx.send(embed=embed)
+        if not warnings:
+            embed = discord.Embed(
+                title="✅ لا توجد تحذيرات",
+                description=f"{member.mention} ليس لديه أي تحذيرات.",
+                color=COLORS["success"]
+            )
+            return await interaction.response.send_message(embed=embed)
+        
+        embed = discord.Embed(
+            title=f"⚠️ تحذيرات {member.name}",
+            description=f"عدد التحذيرات: {len(warnings)}",
+            color=COLORS["warning"]
+        )
+        
+        for i, warn in enumerate(warnings[:10], 1):
+            embed.add_field(
+                name=f"#{i}",
+                value=f"السبب: {warn[2]}\nالمشرف: <@{warn[3]}>\nالوقت: {warn[4][:16]}",
+                inline=False
+            )
+        
+        if len(warnings) > 10:
+            embed.set_footer(text=f"و {len(warnings) - 10} تحذيرات أخرى")
+        
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(name='settings')
-    async def show_settings(self, ctx):
-        if not self.is_authorized(ctx.author.id):
+    @app_commands.command(name="delwarn", description="حذف تحذير معين")
+    @app_commands.describe(member="العضو", warn_id="رقم التحذير")
+    async def delwarn_slash(self, interaction: discord.Interaction, member: discord.Member, warn_id: int):
+        if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        warnings = db.get_warnings(member.id)
+        
+        if not warnings or len(warnings) < warn_id:
+            embed = discord.Embed(
+                title="❌ خطأ",
+                description=f"لا يوجد تحذير #{warn_id} لهذا العضو.",
+                color=COLORS["danger"]
+            )
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.delete_warning(warnings[warn_id-1][0], member.id)
+        embed = discord.Embed(
+            title="✅ تم الحذف",
+            description=f"تم حذف التحذير #{warn_id} من {member.mention}",
+            color=COLORS["success"]
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="settings", description="عرض إعدادات البوت")
+    async def settings_slash(self, interaction: discord.Interaction):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
         settings = db.get_all_settings()
         auto_roles = db.get_auto_roles()
@@ -315,11 +483,13 @@ class Admin(commands.Cog):
         welcome_channel = settings.get('welcome_channel')
         ticket_category = settings.get('ticket_category')
         support_role = settings.get('support_role')
+        command_role = settings.get('command_role')
         
         embed.add_field(name="📋 قناة اللوقات", value=f"<#{log_channel}>" if log_channel else "❌ غير محددة", inline=False)
         embed.add_field(name="🎊 قناة الترحيب", value=f"<#{welcome_channel}>" if welcome_channel else "❌ غير محددة", inline=False)
         embed.add_field(name="📁 كاتيجوري التكتات", value=f"<#{ticket_category}>" if ticket_category else "❌ غير محددة", inline=False)
         embed.add_field(name="🛡️ رتبة الدعم", value=f"<@&{support_role}>" if support_role else "❌ غير محددة", inline=False)
+        embed.add_field(name="🔑 رتبة الصلاحيات", value=f"<@&{command_role}>" if command_role else "❌ غير محددة", inline=False)
         
         if auto_roles:
             roles_text = "\n".join([f"المستوى {level} → <@&{role_id}>" for level, role_id in auto_roles])
@@ -327,7 +497,82 @@ class Admin(commands.Cog):
         else:
             embed.add_field(name="🏅 الرتب التلقائية", value="❌ لا توجد", inline=False)
         
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
+
+    # ====== أوامر الإعدادات القديمة (كـ /) ======
+    @app_commands.command(name="setlog", description="تحديد قناة اللوقات")
+    @app_commands.describe(channel="القناة")
+    async def setlog_slash(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.set_setting('log_channel', channel.id)
+        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {channel.mention} كقناة للوقات.", color=COLORS["success"])
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="setwelcome", description="تحديد قناة الترحيب")
+    @app_commands.describe(channel="القناة")
+    async def setwelcome_slash(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.set_setting('welcome_channel', channel.id)
+        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {channel.mention} كقناة للترحيب.", color=COLORS["success"])
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="setticketcat", description="تحديد كاتيجوري التكتات")
+    @app_commands.describe(category="الكاتيجوري")
+    async def setticketcat_slash(self, interaction: discord.Interaction, category: discord.CategoryChannel):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.set_setting('ticket_category', category.id)
+        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {category.name} ككاتيجوري للتكتات.", color=COLORS["success"])
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="setsupport", description="تحديد رتبة الدعم")
+    @app_commands.describe(role="الرتبة")
+    async def setsupport_slash(self, interaction: discord.Interaction, role: discord.Role):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.set_setting('support_role', role.id)
+        embed = discord.Embed(title="✅ تم التحديد", description=f"تم تحديد {role.mention} كرتبة للدعم.", color=COLORS["success"])
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="setautolevel", description="تحديد رتبة تلقائية لمستوى معين")
+    @app_commands.describe(level="المستوى", role="الرتبة")
+    async def setautolevel_slash(self, interaction: discord.Interaction, level: int, role: discord.Role):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.add_auto_role(level, role.id)
+        embed = discord.Embed(
+            title="✅ تم التحديد",
+            description=f"عند الوصول للمستوى **{level}** سيتم إعطاء رتبة {role.mention}.",
+            color=COLORS["success"]
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="removeautolevel", description="حذف رتبة تلقائية")
+    @app_commands.describe(level="المستوى")
+    async def removeautolevel_slash(self, interaction: discord.Interaction, level: int):
+        if not self.is_authorized(interaction.user.id):
+            embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        db.remove_auto_role(level)
+        embed = discord.Embed(
+            title="✅ تم الحذف",
+            description=f"تم إلغاء الرتبة التلقائية للمستوى **{level}**.",
+            color=COLORS["success"]
+        )
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))
