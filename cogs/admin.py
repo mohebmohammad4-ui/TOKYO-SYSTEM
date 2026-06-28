@@ -26,7 +26,12 @@ class Admin(commands.Cog):
             if role.position >= base_role.position:
                 return True
         return False
-
+        
+# ====== دالة تسجيل الإجراءات ======
+def log_mod_action(self, action, target, moderator, reason):
+    """تسجيل أوامر الإدارة في قاعدة البيانات"""
+    db.add_mod_action(action, target.id, moderator.id, reason)
+    
     # ====== نظام الصلاحيات الهرمي ======
     def has_command_permission(self, member):
         """التحقق من صلاحية العضو بناءً على الرتبة الهرمية"""
