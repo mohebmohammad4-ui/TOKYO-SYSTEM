@@ -12,8 +12,7 @@ class SelfRoles(commands.Cog):
     @app_commands.command(name="selfrole", description="أخذ أو إزالة رتبة اختيارية")
     @app_commands.describe(role="الرتبة")
     async def self_role(self, interaction: discord.Interaction, role: discord.Role):
-        # التحقق من أن الرتبة مسجلة كرتبة اختيارية
-        if not db.get_setting(f'self_role_{role.id}'):
+        if not db.is_self_role(role.id):
             embed = discord.Embed(
                 title="❌ غير متاحة",
                 description="هذه الرتبة غير متاحة للاختيار الذاتي.",
@@ -44,10 +43,7 @@ class SelfRoles(commands.Cog):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=0xff2d55)
             return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        db.set_setting(f'self_role_{role.id}', role.id)
-        if emoji:
-            db.set_setting(f'self_role_emoji_{role.id}', emoji)
-        
+        db.add_self_role(role.id, emoji)
         embed = discord.Embed(
             title="✅ تمت الإضافة",
             description=f"أصبح بإمكان الأعضاء الآن أخذ {role.mention} بأنفسهم.",
@@ -62,8 +58,7 @@ class SelfRoles(commands.Cog):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=0xff2d55)
             return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        db.set_setting(f'self_role_{role.id}', None)
-        db.set_setting(f'self_role_emoji_{role.id}', None)
+        db.remove_self_role(role.id)
         embed = discord.Embed(
             title="✅ تمت الإزالة",
             description=f"تم إزالة {role.mention} من الرتب الاختيارية.",
