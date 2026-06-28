@@ -8,8 +8,9 @@ class Database:
         self.conn = sqlite3.connect('data/tokyo.db')
         self.c = self.conn.cursor()
         self.create_tables()
- 
+    
     def create_tables(self):
+        # ====== الجداول الأساسية ======
         self.c.execute('''CREATE TABLE IF NOT EXISTS warnings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -58,10 +59,44 @@ class Database:
             role_id INTEGER
         )''')
         
+        # ====== الجداول الجديدة ======
+        self.c.execute('''CREATE TABLE IF NOT EXISTS mod_actions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT,
+            target_id INTEGER,
+            moderator_id INTEGER,
+            reason TEXT,
+            timestamp TEXT
+        )''')
+        
+        self.c.execute('''CREATE TABLE IF NOT EXISTS self_roles (
+            role_id INTEGER PRIMARY KEY,
+            emoji TEXT
+        )''')
+        
+        self.c.execute('''CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service TEXT,
+            identifier TEXT,
+            channel_id INTEGER
+        )''')
+        
+        self.c.execute('''CREATE TABLE IF NOT EXISTS starboard_messages (
+            message_id INTEGER PRIMARY KEY,
+            content TEXT,
+            author_id INTEGER,
+            stars INTEGER,
+            timestamp TEXT
+        )''')
+        
         self.conn.commit()
     
+    # ====== دوال الإعدادات ======
     def set_setting(self, key, value):
-        self.c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        if value is None:
+            self.c.execute("DELETE FROM settings WHERE key = ?", (key,))
+        else:
+            self.c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
         self.conn.commit()
     
     def get_setting(self, key, default=None):
@@ -73,6 +108,7 @@ class Database:
         self.c.execute("SELECT * FROM settings")
         return {key: value for key, value in self.c.fetchall()}
     
+    # ====== دوال الرتب التلقائية ======
     def add_auto_role(self, level, role_id):
         self.c.execute("INSERT OR REPLACE INTO auto_roles (level, role_id) VALUES (?, ?)", (level, role_id))
         self.conn.commit()
@@ -85,6 +121,7 @@ class Database:
         self.c.execute("DELETE FROM auto_roles WHERE level = ?", (level,))
         self.conn.commit()
     
+    # ====== دوال الأدمن ======
     def is_admin(self, user_id):
         self.c.execute("SELECT * FROM admins WHERE user_id = ?", (user_id,))
         return self.c.fetchone() is not None
@@ -101,6 +138,7 @@ class Database:
         self.c.execute("SELECT user_id FROM admins")
         return [row[0] for row in self.c.fetchall()]
     
+    # ====== دوال المستويات ======
     def get_level_data(self, user_id):
         self.c.execute("SELECT xp, level FROM levels WHERE user_id = ?", (user_id,))
         return self.c.fetchone()
@@ -116,6 +154,7 @@ class Database:
         self.c.execute("SELECT user_id, level, xp FROM levels ORDER BY level DESC, xp DESC LIMIT ?", (limit,))
         return self.c.fetchall()
     
+    # ====== دوال التحذيرات ======
     def add_warning(self, user_id, reason, moderator_id):
         self.c.execute(
             "INSERT INTO warnings (user_id, reason, moderator_id, timestamp) VALUES (?, ?, ?, ?)",
@@ -132,6 +171,7 @@ class Database:
         self.c.execute("DELETE FROM warnings WHERE id = ? AND user_id = ?", (warn_id, user_id))
         self.conn.commit()
     
+    # ====== دوال التكتات ======
     def create_ticket(self, channel_id, user_id):
         self.c.execute(
             "INSERT INTO tickets (channel_id, user_id, created_at) VALUES (?, ?, ?)",
@@ -159,6 +199,7 @@ class Database:
         self.c.execute("SELECT * FROM tickets WHERE status = 'open'")
         return self.c.fetchall()
     
+    # ====== دوال الردود التلقائية ======
     def add_reply(self, trigger, response):
         self.c.execute("INSERT OR REPLACE INTO autoreply VALUES (?, ?)", (trigger.lower(), response))
         self.conn.commit()
@@ -174,4 +215,64 @@ class Database:
     
     def get_all_replies(self):
         self.c.execute("SELECT * FROM autoreply")
+        return self.c.fetchall()
+    
+    # ====== دوال سجل الإدارة ======
+    def add_mod_action(self, action, target_id, moderator_id, reason):
+        self.c.execute(
+            "INSERT INTO mod_actions (action, target_id, moderator_id, reason, timestamp) VALUES (?, ?, ?, ?, ?)",
+            (action, target_id, moderator_id, reason, datetime.now().isoformat())
+        )
+        self.conn.commit()
+    
+    def get_mod_actions(self, limit=50):
+        self.c.execute("SELECT * FROM mod_actions ORDER BY id DESC LIMIT ?", (limit,))
+        return self.c.fetchall()
+    
+    # ====== دوال الرتب الاختيارية ======
+    def add_self_role(self, role_id, emoji=None):
+        self.c.execute("INSERT OR REPLACE INTO self_roles (role_id, emoji) VALUES (?, ?)", (role_id, emoji))
+        self.conn.commit()
+    
+    def remove_self_role(self, role_id):
+        self.c.execute("DELETE FROM self_roles WHERE role_id = ?", (role_id,))
+        self.conn.commit()
+    
+    def get_self_roles(self):
+        self.c.execute("SELECT role_id, emoji FROM self_roles")
+        return self.c.fetchall()
+    
+    def is_self_role(self, role_id):
+        self.c.execute("SELECT * FROM self_roles WHERE role_id = ?", (role_id,))
+        return self.c.fetchone() is not None
+    
+    # ====== دوال الإشعارات ======
+    def add_notification(self, service, identifier, channel_id):
+        self.c.execute(
+            "INSERT OR REPLACE INTO notifications (service, identifier, channel_id) VALUES (?, ?, ?)",
+            (service, identifier, channel_id)
+        )
+        self.conn.commit()
+    
+    def remove_notification(self, service, identifier):
+        self.c.execute("DELETE FROM notifications WHERE service = ? AND identifier = ?", (service, identifier))
+        self.conn.commit()
+    
+    def get_notifications(self, service=None):
+        if service:
+            self.c.execute("SELECT * FROM notifications WHERE service = ?", (service,))
+        else:
+            self.c.execute("SELECT * FROM notifications")
+        return self.c.fetchall()
+    
+    # ====== دوال Starboard ======
+    def add_starred_message(self, message_id, content, author_id, stars):
+        self.c.execute(
+            "INSERT OR REPLACE INTO starboard_messages (message_id, content, author_id, stars, timestamp) VALUES (?, ?, ?, ?, ?)",
+            (message_id, content, author_id, stars, datetime.now().isoformat())
+        )
+        self.conn.commit()
+    
+    def get_starred_messages(self, limit=10):
+        self.c.execute("SELECT * FROM starboard_messages ORDER BY timestamp DESC LIMIT ?", (limit,))
         return self.c.fetchall()
