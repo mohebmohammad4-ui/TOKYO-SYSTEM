@@ -12,7 +12,7 @@ class Starboard(commands.Cog):
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
-        if user.bot or reaction.emoji != '⭐':
+        if user.bot or str(reaction.emoji) != '⭐':
             return
         
         message = reaction.message
@@ -25,11 +25,24 @@ class Starboard(commands.Cog):
             return
         
         # حساب عدد النجوم
-        star_count = sum(1 for r in message.reactions if str(r.emoji) == '⭐')
+        star_count = 0
+        for r in message.reactions:
+            if str(r.emoji) == '⭐':
+                star_count = r.count
+                break
         
         if star_count >= self.star_threshold:
+            # التحقق من عدم إرسالها مسبقاً
+            existing = db.c.execute(
+                "SELECT * FROM starboard_messages WHERE message_id = ?", 
+                (message.id,)
+            ).fetchone()
+            
+            if existing:
+                return
+            
             embed = discord.Embed(
-                description=message.content or "*بدون محتوى*",
+                description=message.content[:1000] or "*بدون محتوى*",
                 color=0xffd700,
                 timestamp=message.created_at
             )
@@ -43,7 +56,15 @@ class Starboard(commands.Cog):
             if message.attachments:
                 embed.set_image(url=message.attachments[0].url)
             
-            await channel.send(embed=embed)
+            sent = await channel.send(embed=embed)
+            
+            # حفظ في قاعدة البيانات
+            db.add_starred_message(
+                message.id, 
+                message.content[:500] or "بدون محتوى",
+                message.author.id,
+                star_count
+            )
 
     @app_commands.command(name="setstarboard", description="تحديد قناة الـ Starboard")
     @app_commands.describe(channel="القناة", threshold="عدد النجوم المطلوب (افتراضي: 3)")
