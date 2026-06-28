@@ -170,6 +170,7 @@ def log_mod_action(self, action, target, moderator, reason):
                     )
                     await message.channel.send(embed=embed)
             return
+            self.log_mod_action("timeout", member, ctx.auther, reason)
 
         # ====== أمر الحظر ======
         match = re.match(r'بان\s+<@!?(\d+)>(?:\s+(.+))?', message.content)
@@ -214,6 +215,7 @@ def log_mod_action(self, action, target, moderator, reason):
                     )
                     await message.channel.send(embed=embed)
             return
+            self.log_mod_action("ban", member, ctx.auther, reason)
 
         # ====== أمر التحذير ======
         match = re.match(r'تحذير\s+<@!?(\d+)>(?:\s+(.+))?', message.content)
@@ -235,6 +237,7 @@ def log_mod_action(self, action, target, moderator, reason):
                 await message.channel.send(embed=embed)
                 await message.delete()
                 return
+                self.log_mod_action("warn", member, ctx.auther, reason)
 
             member = message.guild.get_member(user_id)
             if member:
