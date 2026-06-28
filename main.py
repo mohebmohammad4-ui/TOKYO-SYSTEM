@@ -19,7 +19,8 @@ async def load_cogs():
         'cogs.welcome',
         'cogs.logs',
         'cogs.antispam',
-        'cogs.voice'
+        'cogs.voice',
+        'cogs.slash_commands'  # ➕ نظام الأوامر المائلة
     ]
     
     for cog in cogs_list:
@@ -34,6 +35,13 @@ async def on_ready():
     print(f'✅ {bot.user} جاهز للعمل!')
     print(f'📊 شغال على {len(bot.guilds)} سيرفرات')
     
+    # ====== تسجيل الأوامر المائلة ======
+    try:
+        synced = await bot.tree.sync()
+        print(f'✅ تم تسجيل {len(synced)} أمر مائل')
+    except Exception as e:
+        print(f'❌ فشل تسجيل الأوامر: {e}')
+    
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
@@ -45,8 +53,9 @@ async def on_ready():
 async def on_connect():
     print('🔄 جاري الاتصال بـ Discord...')
 
-@bot.command(name='help')
-async def help_command(ctx):
+# ====== أمر المساعدة ======
+@bot.tree.command(name="help", description="عرض قائمة الأوامر")
+async def help_slash(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎌 TOKYO SYSTEM - قائمة الأوامر",
         description="جميع أوامر البوت مقسمة حسب الأنظمة",
@@ -56,36 +65,42 @@ async def help_command(ctx):
     
     embed.add_field(
         name="🛡️ الإدارة",
-        value="`!ban` `!timeout` `!warn` `!warnings` `!delwarn` `!addadmin` `!removeadmin`",
+        value="`/ban` `/timeout` `/warn` `/warnings` `/delwarn` `/addadmin` `/removeadmin`",
         inline=False
     )
     
     embed.add_field(
         name="📈 المستويات",
-        value="`!rank` `!leaderboard`",
+        value="`/rank` `/leaderboard`",
         inline=False
     )
     
     embed.add_field(
         name="🎫 التكتات",
-        value="`!ticket` `!close` `!claim` `!unclaim`",
+        value="`/ticket` `/close` `/claim` `/unclaim`",
         inline=False
     )
     
     embed.add_field(
         name="🤖 الردود التلقائية",
-        value="`!addreply` `!delreply` `!replies`",
+        value="`/addreply` `/delreply` `/replies`",
         inline=False
     )
     
     embed.add_field(
         name="🎊 الترحيب",
-        value="`!setwelcome`",
+        value="`/setwelcome`",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⚙️ الإعدادات",
+        value="`/settings` `/setlog` `/setticketcat` `/setsupport` `/setautolevel`",
         inline=False
     )
     
     embed.set_footer(text="TOKYO COMMUNITY 🇯🇵 | صنع بحب ❤️")
-    await ctx.send(embed=embed)
+    await interaction.response.send_message(embed=embed)
 
 async def main():
     try:
@@ -93,7 +108,7 @@ async def main():
             await load_cogs()
             await bot.start(TOKEN)
     except discord.LoginFailure:
-        print("❌ خطأ في التوكن! تأكد من وضع التوكن الصحيح في متغيرات البيئة TOKEN")
+        print("❌ خطأ في التوكن!")
         sys.exit(1)
     except Exception as e:
         print(f"❌ حدث خطأ: {e}")
