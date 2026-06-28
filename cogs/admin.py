@@ -15,16 +15,32 @@ class Admin(commands.Cog):
     def is_authorized(self, user_id):
         return db.is_admin(user_id) or user_id == OWNER_ID
 
-    # ====== التحقق من رتبة الصلاحيات ======
-    def has_command_role(self, member):
-        """التحقق إذا كان العضو عنده رتبة الصلاحيات من قاعدة البيانات"""
-        role_id = db.get_setting('command_role')
-        if not role_id:
+    # ====== نظام الصلاحيات الهرمي ======
+    def has_command_permission(self, member):
+        """التحقق من صلاحية العضو بناءً على الرتبة الهرمية"""
+        # المالك عنده كل الصلاحيات
+        if member.id == OWNER_ID:
+            return True
+        
+        # الأدمن في البوت عنده كل الصلاحيات
+        if db.is_admin(member.id):
+            return True
+        
+        # جلب رتبة الصلاحيات من قاعدة البيانات
+        command_role_id = db.get_setting('command_role')
+        if not command_role_id:
             return False
-        role = member.guild.get_role(int(role_id))
-        if not role:
+        
+        command_role = member.guild.get_role(int(command_role_id))
+        if not command_role:
             return False
-        return role in member.roles
+        
+        # التحقق: إذا كان العضو عنده الرتبة أو رتبة أعلى منها
+        for role in member.roles:
+            if role.position >= command_role.position:
+                return True
+        
+        return False
 
     # ====== دالة تحويل الوقت ======
     def parse_time(self, time_str):
@@ -59,15 +75,14 @@ class Admin(commands.Cog):
         }
         return helps.get(command_name, "الأمر غير معروف")
 
-    # ====== نظام قراءة الشات (يشتغل فقط مع الرتبة المحددة) ======
+    # ====== نظام قراءة الشات (هرمي) ======
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
 
-        # ====== التحقق من الرتبة ======
-        if not self.has_command_role(message.author):
-            # إذا ما عنده الرتبة، يسكت وما يرد
+        # ====== التحقق من الصلاحية الهرمية ======
+        if not self.has_command_permission(message.author):
             return
 
         # ====== أمر التايم ======
@@ -282,18 +297,35 @@ class Admin(commands.Cog):
 
     # ====== أوامر / (Slash Commands) ======
     
-    @app_commands.command(name="setcommandrole", description="تحديد رتبة الصلاحيات للأوامر الصوتية")
-    @app_commands.describe(role="الرتبة المطلوبة لاستخدام الأوامر الصوتية")
+    @app_commands.command(name="setcommandrole", description="تحديد رتبة الصلاحيات (الرتب الأعلى تاخذ صلاحية تلقائيًا)")
+    @app_commands.describe(role="الرتبة المطلوبة (كل الرتب الأعلى منها تاخذ الصلاحية)")
     async def set_command_role(self, interaction: discord.Interaction, role: discord.Role):
         if not self.is_authorized(interaction.user.id):
             embed = discord.Embed(title="❌ خطأ", description="ليس لديك صلاحية.", color=COLORS["danger"])
             return await interaction.response.send_message(embed=embed, ephemeral=True)
         
         db.set_setting('command_role', role.id)
+        
+        # جلب الرتب الأعلى
+        higher_roles = [r for r in interaction.guild.roles if r.position > role.position]
+        higher_roles_text = "\n".join([f"- {r.mention}" for r in higher_roles[:10]]) if higher_roles else "لا يوجد"
+        if len(higher_roles) > 10:
+            higher_roles_text += f"\nو {len(higher_roles) - 10} رتب أخرى"
+        
         embed = discord.Embed(
             title="✅ تم التحديد",
-            description=f"تم تحديد رتبة {role.mention} كرتبة الصلاحيات للأوامر الصوتية.",
+            description=f"تم تحديد رتبة {role.mention} كرتبة الصلاحيات الأساسية.",
             color=COLORS["success"]
+        )
+        embed.add_field(
+            name="👑 الرتب التي ستأخذ الصلاحية تلقائيًا",
+            value=higher_roles_text,
+            inline=False
+        )
+        embed.add_field(
+            name="📌 ملاحظة",
+            value="جميع الرتب الأعلى من {role.mention} في ترتيب الرتب ستأخذ نفس الصلاحية تلقائيًا.",
+            inline=False
         )
         await interaction.response.send_message(embed=embed)
 
@@ -499,7 +531,7 @@ class Admin(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    # ====== أوامر الإعدادات القديمة (كـ /) ======
+    # ====== أوامر الإعدادات ======
     @app_commands.command(name="setlog", description="تحديد قناة اللوقات")
     @app_commands.describe(channel="القناة")
     async def setlog_slash(self, interaction: discord.Interaction, channel: discord.TextChannel):
