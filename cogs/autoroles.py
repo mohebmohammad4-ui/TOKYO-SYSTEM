@@ -23,7 +23,6 @@ class AutoRoles(commands.Cog):
     @app_commands.command(name="setjoinrole", description="تحديد رتبة للأعضاء الجدد")
     @app_commands.describe(role="الرتبة")
     async def set_join_role(self, interaction: discord.Interaction, role: discord.Role):
-        # ✅ تأجيل الرد لتجنب انتهاء الوقت
         await interaction.response.defer(ephemeral=True)
         
         if not db.is_admin(interaction.user.id):
