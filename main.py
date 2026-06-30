@@ -6,9 +6,9 @@ import sys
 from config import TOKEN, PREFIX, COLORS
 from database import Database
 
-# ====== إعدادات البوت مع تفعيل Intents ======
+# ====== تفعيل جميع الـ Intents ======
 intents = discord.Intents.all()
-intents.message_content = True  # ✅ هذا هو المطلوب عشان يقرأ الرسائل
+intents.message_content = True  # ⬅️ ضروري لقراءة الرسائل
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 db = Database()
@@ -18,11 +18,12 @@ async def load_cogs():
         'cogs.admin',
         'cogs.leveling',
         'cogs.tickets',
-        'cogs.autoreply',      # ✅ تأكد من وجوده
+        'cogs.autoreply',
         'cogs.welcome',
         'cogs.logs',
         'cogs.antispam',
-        'cogs.voice'
+        'cogs.voice',
+        'cogs.autoroles'
     ]
     
     for cog in cogs_list:
